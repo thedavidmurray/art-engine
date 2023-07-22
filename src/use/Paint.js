@@ -85,6 +85,8 @@ export default {
   drawElement(_renderObject, format) {
     const layerCanvas = createCanvas(format.width, format.height);
     const layerctx = layerCanvas.getContext("2d");
+    layerctx.patternQuality = "nearest";
+    layerctx.quality = "nearest";
     layerctx.imageSmoothingEnabled = format.smoothing;
 
     layerctx.drawImage(

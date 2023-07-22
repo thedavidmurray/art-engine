@@ -4,23 +4,34 @@ import path from "path";
 import directoryTree from "directory-tree";
 import { exec } from "child_process";
 import { stdout } from "process";
+import Parser from "./Parser.js";
 import {
   extraAttributes,
   buildDir,
   description,
   extraMetadata,
+  emptyLayerName,
   baseUri,
   outputJPEG,
   hashImages,
+  skipTrait,
 } from "../../config.js";
 
 export default {
   attributesList: [],
   metadataList: [],
+
   addAttributes(_element) {
-    let selectedElement = _element.layer;
+    if (skipTrait.includes(Parser.cleanName(_element.layer.trait))) {
+      return;
+    }
+
+    const selectedElement = _element.layer;
+    if (selectedElement.traitValue == "None") {
+      return;
+    }
     const layerAttributes = {
-      trait_type: _element.layer.trait,
+      trait_type: Parser.cleanName(_element.layer.trait),
       value: selectedElement.traitValue,
       ...(_element.layer.display_type !== undefined && {
         display_type: _element.layer.display_type,
@@ -28,7 +39,8 @@ export default {
     };
     if (
       this.attributesList.some(
-        (attr) => attr.trait_type === layerAttributes.trait_type
+        (attr) =>
+          attr.trait_type === Parser.cleanName(layerAttributes.trait_type)
       )
     ) {
       return;
@@ -36,27 +48,16 @@ export default {
     this.attributesList.push(layerAttributes);
   },
 
-  addAttributes(_element) {
-    let selectedElement = _element.layer;
-    const layerAttributes = {
-      trait_type: _element.layer.trait,
-      value: selectedElement.traitValue,
-      ...(_element.layer.display_type !== undefined && {
-        display_type: _element.layer.display_type,
-      }),
-    };
-    if (
-      this.attributesList.some(
-        (attr) => attr.trait_type === layerAttributes.trait_type
-      )
-    )
-      return;
-    this.attributesList.push(layerAttributes);
-  },
-
-  addMetadata(_dna, _edition, _prefixData) {
+  addMetadata(_dna, token, _prefixData) {
     let dateTime = Date.now();
-    const { _prefix, _offset, _imageHash } = _prefixData;
+    const _edition = token.genOrder;
+    const {
+      _prefix,
+      _offset,
+      _imageHash,
+      layerConfigIndex,
+      _globalAttributes,
+    } = _prefixData;
 
     const combinedAttrs = [...this.attributesList, ...extraAttributes()];
     const cleanedAttrs = combinedAttrs.reduce((acc, current) => {
@@ -69,14 +70,14 @@ export default {
     }, []);
 
     let tempMetadata = {
-      name: `${_prefix ? _prefix + " " : ""}#${_edition - _offset}`,
-      description: description,
+      name: `${_prefix ? _prefix + " " : ""}#${token.id - _offset}`,
+      description,
       image: `${baseUri}/${_edition}${outputJPEG ? ".jpg" : ".png"}`,
       ...(hashImages === true && { imageHash: _imageHash }),
       edition: _edition,
       date: dateTime,
       ...extraMetadata,
-      attributes: cleanedAttrs,
+      attributes: [..._globalAttributes, ...cleanedAttrs],
       compiler: "NFTChef 2.0.0 Beta",
     };
     this.metadataList.push(tempMetadata);

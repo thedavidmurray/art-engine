@@ -57,10 +57,10 @@ const saveMetaDataSingleFile = (_editionCount, _buildDir) => {
 };
 
 const postProcessMetadata = (layerData) => {
-  const { tokenIndex, layerConfigIndex } = layerData;
+  const { token, layerConfigIndex } = layerData;
   // Metadata options
   const savedFile = fs.readFileSync(
-    `${buildDir}/images/${tokenIndex}${outputJPEG ? ".jpg" : ".png"}`
+    `${buildDir}/images/${token.genOrder}${outputJPEG ? ".jpg" : ".png"}`
   );
   const _imageHash = hash(savedFile);
 
@@ -71,9 +71,25 @@ const postProcessMetadata = (layerData) => {
     : null;
   // if resetNameIndex is turned on, calculate the offset and send it
   // with the prefix
+
   let _offset = 0;
-  if (layerConfigurations[layerConfigIndex].resetNameIndex) {
-    _offset = layerConfigurations[layerConfigIndex - 1].growEditionSizeTo;
+  // recursively lookup last resetNameIndex
+  function findResetNameIndex(layerConfigurations, layerConfigIndex) {
+    if (layerConfigurations[layerConfigIndex].resetNameIndex) {
+      return layerConfigIndex;
+    } else if (layerConfigIndex > 0) {
+      return findResetNameIndex(layerConfigurations, layerConfigIndex - 1);
+    } else {
+      return -1; // Return -1 if no item with resetNameIndex set to true is found
+    }
+  }
+
+  const resetNameIndex = findResetNameIndex(
+    layerConfigurations,
+    layerConfigIndex
+  );
+  if (resetNameIndex !== -1) {
+    _offset = layerConfigurations[resetNameIndex - 1].growEditionSizeTo;
   }
 
   return {
@@ -93,25 +109,26 @@ const hash = (input) => {
 };
 
 const outputFiles = (
-  tokenIndex,
+  token,
   layerData,
   _buildDir = buildDir,
   _canvas = canvas
 ) => {
   const { dna, layerConfigIndex } = layerData;
   // Save the canvas buffer to file
-  saveImage(tokenIndex, _buildDir, _canvas);
+  saveImage(token.genOrder, _buildDir, _canvas);
 
   const { _imageHash, _prefix, _offset } = postProcessMetadata(layerData);
 
-  const metadata = Metadata.addMetadata(dna, tokenIndex, {
+  const metadata = Metadata.addMetadata(dna, token, {
     _prefix,
     _offset,
     _imageHash,
+    layerConfigIndex,
+    _globalAttributes: layerConfigurations[layerConfigIndex].attributes ?? [],
   });
 
-  saveMetaDataSingleFile(tokenIndex, _buildDir);
-  console.log(chalk.cyan(`Created edition: ${tokenIndex}`));
+  saveMetaDataSingleFile(token.genOrder, _buildDir);
 
   return metadata;
 };
@@ -129,9 +146,15 @@ async function generate(
   DNA_DELIMITER,
   layerConfigIndex,
   background,
-  tokenIndex
+  token //object {id,genOrder}
 ) {
   const dna = _dna.split(DNA_DELIMITER);
+  // has background information?
+  const bgHSL = _dna.match(/(___.*)/);
+
+  if (background != false && bgHSL) {
+    background.color = bgHSL[0].replace("___", "");
+  }
 
   let mappedDnaToLayers = _layers.map((layer, index) => {
     let selectedElements = [];
@@ -186,12 +209,12 @@ async function generate(
   const layerData = {
     dna,
     layerConfigIndex,
-    tokenIndex,
+    token,
     _background: background,
   };
   Paint.paintLayers(ctxMain, renderObjectArray, layerData, format);
 
-  const metadata = outputFiles(tokenIndex, layerData);
+  const metadata = outputFiles(token, layerData);
   return metadata;
 }
 

@@ -42,7 +42,7 @@ const {
 const isLocal = typeof process.pkg === "undefined";
 const basePath = isLocal ? process.cwd() : path.dirname(process.execPath);
 
-console.log(path.join(basePath, "/src/config.js"));
+// console.log(path.join(basePath, "/src/config.js"));
 // const canvas = createCanvas(format.width, format.height);
 // const ctxMain = canvas.getContext("2d");
 // ctxMain.imageSmoothingEnabled = format.smoothing;
@@ -88,6 +88,10 @@ const getElements = (path, layer) => {
       const extension = /\.[0-9a-zA-Z]+$/;
       const sublayer = !extension.test(i);
       const weight = Parser.getRarityWeight(i, rarityDelimiter);
+      const valueFlag = Parser.parseValueFlag(i);
+      // if the file has a value flag or inherits an explicitVAlue from
+      // the parent, set the current explicitValue.
+      const explicitValue = valueFlag ? name : layer.explicitValue ?? null;
 
       const { blendmode, opacity } = Parser.parseQueryString(i, layer, name);
       //pass along the Parser.zflag to any children
@@ -99,6 +103,8 @@ const getElements = (path, layer) => {
 
       const element = {
         sublayer,
+        valueFlag,
+        explicitValue, // has highest level of override power
         weight,
         blendmode,
         opacity,
@@ -112,7 +118,13 @@ const getElements = (path, layer) => {
       if (sublayer) {
         element.path = `${path}${i}`;
         const subPath = `${path}${i}/`;
-        const sublayer = { ...layer, blend: blendmode, opacity, zindex };
+        const sublayer = {
+          ...layer,
+          blend: blendmode,
+          explicitValue,
+          opacity,
+          zindex,
+        };
         element.elements = getElements(subPath, sublayer);
       }
 
@@ -144,11 +156,14 @@ const getElements = (path, layer) => {
         : layer.trait !== undefined
         ? layer.trait
         : parentName;
-
-      const rawTrait = getTraitValueFromPath(element, lineage);
-      const trait = processTraitOverrides(rawTrait);
-      element.traitValue = trait;
-
+      // is there an explicitly set _v value flag?
+      if (explicitValue) {
+        element.traitValue = explicitValue;
+      } else {
+        const rawTrait = getTraitValueFromPath(element, lineage);
+        const trait = processTraitOverrides(rawTrait);
+        element.traitValue = trait;
+      }
       return element;
     });
 };
@@ -292,6 +307,7 @@ function pickRandomElement(
     return dnaSequence.push(dnaString);
   }
 
+  console.log({ layer, incompatibleDNA });
   if (incompatibleDNA.includes(layer.name) && layer.sublayer) {
     debugLogs
       ? console.log(
@@ -444,6 +460,10 @@ function shuffle(array) {
   while (currentIndex != 0) {
     randomIndex = Math.floor(Math.random() * currentIndex);
     currentIndex--;
+    const tempId = array[currentIndex].id;
+    array[currentIndex].id = array[randomIndex].id;
+    array[randomIndex].id = tempId;
+
     [array[currentIndex], array[randomIndex]] = [
       array[randomIndex],
       array[currentIndex],
@@ -474,13 +494,13 @@ const startCreating = async (storedDNA) => {
       1;
     i++
   ) {
-    abstractedIndexes.push(i);
+    abstractedIndexes.push({ id: i, genOrder: i });
   }
   if (shuffleLayerConfigurations) {
     abstractedIndexes = shuffle(abstractedIndexes);
   }
   debugLogs
-    ? console.log("Editions left to create: ", abstractedIndexes)
+    ? console.log("Editions left to create: ", abstractedIndexes.length)
     : null;
 
   const generatorPromises = [];
@@ -506,12 +526,14 @@ const startCreating = async (storedDNA) => {
         // prepend the same output num (abstractedIndexes[0])
         // to the DNA as the saved files.
         dnaList.add(
-          `${abstractedIndexes[0]}/${newDna}${
+          `${abstractedIndexes[0].id}/${newDna}${
             background.color ? "___" + background.color : ""
           }`
         );
         uniqueDNAList.add(filterDNAOptions(newDna));
-        editionDNAs.push(newDna);
+        editionDNAs.push(
+          `${newDna}${background.color ? "___" + background.color : ""}`
+        );
         editionCount++;
       } else {
         console.log(chalk.bgRed("DNA exists!"));
@@ -526,7 +548,7 @@ const startCreating = async (storedDNA) => {
     }
 
     editionDNAs.forEach((dna) => {
-      const tokenIndex = abstractedIndexes.shift();
+      const token = abstractedIndexes.shift();
 
       generatorPromises.push(
         pool.exec("generate", [
@@ -535,7 +557,7 @@ const startCreating = async (storedDNA) => {
           DNA_DELIMITER,
           layerConfigIndex,
           background,
-          tokenIndex,
+          token,
         ])
       );
     });
@@ -545,6 +567,10 @@ const startCreating = async (storedDNA) => {
 
   Promise.all(generatorPromises).then(async (results) => {
     // Wait for all assets to be generated before writing the combined metadata
+
+    if (shuffleLayerConfigurations) {
+      results.sort((a, b) => a.edition - b.edition);
+    }
     writeMetaData(JSON.stringify(results, null, 2));
     Metadata.layerMap();
     pool.terminate();
@@ -562,4 +588,5 @@ export {
   getElementOptions,
   startCreating,
   writeMetaData,
+  writeDnaLog,
 };

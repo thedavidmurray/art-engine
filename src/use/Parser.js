@@ -1,5 +1,6 @@
 // TODO: refactor: remove main.js coupling
 import { getElementOptions } from "../main.js";
+import * as Config from "../../config.js";
 
 export default {
   zflag: /(z-?\d*,)/,
@@ -20,21 +21,37 @@ export default {
     return dna;
   },
 
-  cleanName(_str, rarityDelimiter) {
+  cleanName(_str, rarityDelimiter, titlecase = false) {
     const hasZ = this.zflag.test(_str);
+    const extensionRegex = /\.[0-9a-zA-Z]+$/;
+    const queryRegex = /\?(.*)/;
+    const valueFlagRegex = /_v$/;
 
-    const zRemoved = _str.replace(this.zflag, "");
-
-    const extension = /\.[0-9a-zA-Z]+$/;
-    const hasExtension = extension.test(zRemoved);
-    let nameWithoutExtension = hasExtension ? zRemoved.slice(0, -4) : zRemoved;
-    var nameWithoutWeight = nameWithoutExtension.split(rarityDelimiter).shift();
-    return nameWithoutWeight;
+    let cleanedName = _str.replace(this.zflag, "");
+    const hasExtension = extensionRegex.test(cleanedName);
+    cleanedName = cleanedName.replace(extensionRegex, "");
+    cleanedName = cleanedName.replace(valueFlagRegex, "");
+    cleanedName = cleanedName.replace(queryRegex, "");
+    cleanedName = cleanedName.split(rarityDelimiter)[0];
+    if (titlecase) {
+      cleanedName = cleanedName.replace(/\b\w+/g, (txt) => {
+        return `${txt.charAt(0).toUpperCase()}${txt.substr(1).toLowerCase()}`;
+      });
+    }
+    return cleanedName;
   },
 
   parseQueryString(filename, layer, sublayer) {
-    const query = /\?(.*)\./;
-    const querystring = query.exec(filename);
+    const extensionRegex = /\.[0-9a-zA-Z]+$/;
+    const queryRegex = /\?(.*)/;
+    const valueFlagRegex = /_v$/;
+
+    const sanitized = filename
+      .replace(extensionRegex, "")
+      .replace(valueFlagRegex, "")
+      .split(Config.rarityDelimiter)[0];
+
+    const querystring = queryRegex.exec(sanitized);
     if (!querystring) {
       return getElementOptions(layer, sublayer);
     }
@@ -51,6 +68,12 @@ export default {
         ? layerstyles.opacity / 100
         : getElementOptions(layer, sublayer).opacity,
     };
+  },
+
+  parseValueFlag(str) {
+    const regex = /_v(\.[0-9a-zA-Z]+)?$/;
+    console.log(`test str`, regex.test(str));
+    return regex.test(str);
   },
 
   parseZIndex(str) {

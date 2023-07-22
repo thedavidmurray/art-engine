@@ -4,10 +4,10 @@
   "description": "NFTChef Fork - Hard fork from HashLips Art Engine, is a tool used to create multiple different instances of artworks based on provided layers. Most config is the same as Hashlips",
   "main": "index.js",
   "bin": "index.js",
+  "type": "module",
   "engines": {
     "node": ">=14"
   },
-  "type": "module",
   "pkg": {
     "assets": [
       "layers/**/*",

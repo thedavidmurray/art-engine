@@ -20,8 +20,8 @@ yarn-error.log*
 lerna-debug.log\*
 
 # Diagnostic reports (https://nodejs.org/api/report.html)
-
 report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
+
 
 # Runtime data
 
@@ -67,6 +67,8 @@ dist/
 node_modules/
 jspm_packages/
 
+
+TODO.md
 # TypeScript v1 declaration files
 
 typings/
