@@ -79,11 +79,20 @@ const replace = (image, randomID, sourcePath, options) => {
       ? new RegExp(options.replacementSymbol, "gm")
       : /##/gm;
 
-    options.debug ? console.log({ symbol }) : null;
     const updatedMetadata = JSON.stringify(newMetadata, null, 2).replace(
       symbol,
       randomID
     );
+
+    const sanitizedMetadata = JSON.parse(updatedMetadata);
+    // ensure the replacement edition/identifier is a number
+    const identifierProp = options.identifier ?? "edition";
+    sanitizedMetadata[identifierProp] = parseInt(
+      sanitizedMetadata[identifierProp]
+    );
+    sanitizedMetadata.name = sanitizedMetadata.name.replace(/(\d+)/g, "#$1");
+
+    options.debug ? console.log({ symbol }) : null;
 
     options.debug
       ? console.log(`Generating hash from ${image}`, imageHash)
@@ -100,6 +109,7 @@ const replace = (image, randomID, sourcePath, options) => {
         : item.edition;
       return globalIndex === randomID;
     });
+    console.log("updateIndex", updateIndex);
     if (updateIndex < 0) {
       throw new Error(
         `Could not find the identifier, "${
@@ -108,29 +118,35 @@ const replace = (image, randomID, sourcePath, options) => {
       );
     }
     options.debug
-      ? console.log(`updating _metadata.json index [${updateIndex}]`)
+      ? console.log(
+          `updating _metadata.json index [${updateIndex}]`,
+          globalMetadata[updateIndex]
+        )
       : null;
 
     const updatedGlobalMetadata = globalMetadata;
     // set the new data in the _metadata.json
-    updatedGlobalMetadata[updateIndex] = JSON.parse(updatedMetadata);
+    console.log({ sanitizedMetadata });
+    updatedGlobalMetadata[updateIndex] = sanitizedMetadata;
     // everything looks good to write files.
     // overwrite the build json file
-    fs.writeFileSync(
-      path.join(builtJsonDir, `${randomID}.json`),
-      updatedMetadata
-    );
-    // overwrite the build image file
-    fs.writeFileSync(
-      path.join(builtImageDir, `${randomID}.${imageExtension}`),
-      currentImage
-    );
+    if (!options.nowrite) {
+      fs.writeFileSync(
+        path.join(builtJsonDir, `${randomID}.json`),
+        JSON.stringify(sanitizedMetadata, null, 2)
+      );
+      // overwrite the build image file
+      fs.writeFileSync(
+        path.join(builtImageDir, `${randomID}.${imageExtension}`),
+        currentImage
+      );
 
-    // overwrite the build image file
-    fs.writeFileSync(
-      path.join(builtJsonDir, "_metadata.json"),
-      JSON.stringify(updatedGlobalMetadata, null, 2)
-    );
+      // overwrite the build image file
+      fs.writeFileSync(
+        path.join(builtJsonDir, "_metadata.json"),
+        JSON.stringify(updatedGlobalMetadata, null, 2)
+      );
+    }
   } catch (error) {
     console.error(error);
     throw new Error(`Image ${imageNum} is missing a matching JSON file`);
@@ -141,6 +157,11 @@ program
   .argument("<source>")
   .option("-d, --debug", "display additional logging")
   .option("-s, --sneak", "output the random ID's that are being replaced")
+  .option("-n, --nowrite", "dry run to test without writing the data out")
+  .option(
+    "-p, --pick <pick>",
+    "Comma separated list. explicitly pick the numbers that will be replaced"
+  )
   .option(
     "-r, --replacementSymbol <symbol>",
     "The character used as a placeholder for edition numbers"
@@ -159,8 +180,17 @@ program
     const imageFiles = getIndividualImageFiles(imageSource);
     const dataFiles = getIndividualJsonFiles(dataSource);
     // global variable to keep track of which ID's have been used.
-    const randomIDs = new Set();
-
+    let randomIDs = new Set();
+    if (options.pick) {
+      const parsedIDs = options.pick.split(",").map((n) => parseInt(n));
+      randomIDs = new Set(parsedIDs);
+    }
+    options.pick ? console.log(`Replacing the follong ids`, randomIDs) : null;
+    options.nowrite
+      ? console.log(
+          chalk.yellowBright("\nDry run. Images and data will NOT be replaced")
+        )
+      : null;
     console.log(
       chalk.greenBright.inverse(`\nPulling images and data from ${source}`)
     );
@@ -180,7 +210,13 @@ program
       );
     }
     // get the length of images in the build folder
-    const totalCount = fs.readdirSync(builtImageDir).length;
+    const totalCount =
+      JSON.parse(fs.readFileSync(path.join(builtJsonDir, "_metadata.json")))
+        .length - 1;
+    // fs.readdirSync(builtImageDir).length;
+
+    console.log(`Total count ${totalCount}`);
+
     while (randomIDs.size < imageFiles.length) {
       randomIDs.add(Math.floor(Math.random() * (totalCount - 1 + 1) + 1));
     }
@@ -202,7 +238,7 @@ program
     //   console.error(chalk.bgRedBright.black(error));
     // }
 
-    // side effects?
+    // side effectsa
     // does it affect rarity data util?
     // provenance hash?
 

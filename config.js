@@ -42,10 +42,15 @@ const background = {
 
 const layerConfigurations = [
   {
-    growEditionSizeTo: 3,
-    namePrefix: "Series 2", // Use to add a name to Metadata `name:`
+    growEditionSizeTo: 2,
+    namePrefix: "Series A", // Use to add a name to Metadata `name:`
     layersOrder: [
-      { name: "Background" },
+      {
+        name: "Background",
+        options: {
+          bypassDNA: true,
+        },
+      },
       {
         name: "Back Accessory",
         trait: "BOCK POCK",
@@ -62,23 +67,45 @@ const layerConfigurations = [
       { name: "Shirt Accessories" },
     ],
   },
-  // {
-  //   growEditionSizeTo: 10,
-  //   namePrefix: "Lion",
-  //   resetNameIndex: true, // this will start the Lion count at #1 instead of #6
-  //   layersOrder: [
-  //     { name: "Background" },
-  //     { name: "Hats" },
-  //     { name: "Male Hair" },
-  //   ],
-  // },
+  {
+    growEditionSizeTo: 5,
+    namePrefix: "Series A2", // Use to add a name to Metadata `name:`
+    layersOrder: [
+      {
+        name: "Background",
+        options: {
+          bypassDNA: true,
+        },
+      },
+      {
+        name: "Back Accessory",
+        trait: "BOCK POCK",
+        options: {
+          bypassDNA: true,
+        },
+      },
+      { name: "Head" },
+      { name: "Clothes" },
+      { name: "Eyes" },
+      { name: "Hair" },
+      { name: "Items" },
+      { name: "Items2", trait: "Items2" },
+      { name: "Shirt Accessories" },
+    ],
+  },
+  {
+    growEditionSizeTo: 8,
+    namePrefix: "Series C",
+    resetNameIndex: true, // this will start the Lion count at #1 instead of #6
+    layersOrder: [{ name: "Background" }, { name: "Head" }, { name: "Hair" }],
+  },
 ];
 
 /**
  * Set to true for when using multiple layersOrder configuration
  * and you would like to shuffle all the artwork together
  */
-const shuffleLayerConfigurations = false;
+const shuffleLayerConfigurations = true;
 
 const debugLogs = true;
 
@@ -89,13 +116,8 @@ const debugLogs = true;
 // if you use an empty/transparent file, set the name here.
 const emptyLayerName = "NONE";
 
-/**
- * Incompatible items can be added to this object by a files cleanName
- * This works in layer order, meaning, you need to define the layer that comes
- * first as the Key, and the incompatible items that _may_ come after.
- * The current version requires all layers to have unique names, or you may
- * accidentally set incompatibilities for the _wrong_ item.
- */
+const titleCaseNames = true;
+
 const zflag = /(z-?\d*,)/;
 const rarityDelimiter = "#";
 const cleanName = (_str) => {
@@ -110,6 +132,13 @@ const cleanName = (_str) => {
   return nameWithoutWeight;
 };
 
+/**
+ * Incompatible items can be added to this object by a files cleanName
+ * This works in layer order, meaning, you need to define the layer that comes
+ * first as the Key, and the incompatible items that _may_ come after.
+ * The current version requires all layers to have unique names, or you may
+ * accidentally set incompatibilities for the _wrong_ item.
+ */
 const incompatible = {};
 
 const ITEMS = fs
@@ -122,7 +151,7 @@ const ITEMS = fs
 //   incompatible[item] = [item];
 // });
 
-console.log({ ITEMS, incompatible });
+console.log("reading incompatible from main", { ITEMS, incompatible });
 /**
  * Require combinations of files when constructing DNA, this bypasses the
  * randomization and weights.
@@ -135,6 +164,10 @@ console.log({ ITEMS, incompatible });
 const forcedCombinations = {
   // floral: ["MetallicShades", "Golden Sakura"],
 };
+
+// add layers/sublayer names to the array to prevent them from being
+// added to the final metadata json.
+const skipTrait = [];
 
 /**
  * In the event that a filename cannot be the trait value name, for example when
@@ -221,6 +254,8 @@ export {
   preview_gif,
   rarityDelimiter,
   shuffleLayerConfigurations,
+  skipTrait,
+  titleCaseNames,
   startIndex,
   traitValueOverrides,
   uniqueDnaTorrance,

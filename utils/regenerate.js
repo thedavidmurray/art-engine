@@ -16,11 +16,13 @@ import { Command } from "commander";
 import chalk from "chalk";
 import cnv from "canvas";
 import Metadata from "../src/use/Metadata.js";
+import workerpool from "workerpool";
 
 import {
   format,
   background,
   uniqueDnaTorrance,
+  shuffleLayerConfigurations,
   layerConfigurations,
   outputJPEG,
   startIndex,
@@ -30,12 +32,19 @@ import {
   createDna,
   DNA_DELIMITER,
   isDnaUnique,
-  paintLayers,
+  writeMetaData,
+  writeDnaLog,
+  // paintLayers,
   layersSetup,
-  constructLayerToDna,
-  loadLayerImg,
-  postProcessMetadata,
+  // cmappedDnaToLayersonstructLayerToDna,
+  // postProcessMetadata,
 } from "../src/main.js";
+
+import Paint from "../src/use/Paint.js";
+
+const pool = workerpool.pool("./src/worker.js", {
+  workerType: "process",
+});
 
 const { createCanvas } = cnv;
 
@@ -59,11 +68,74 @@ const getDNA = () => {
   // .filter((item) => /^[0-9]{1,6}.json/g.test(item));
 };
 
-const createItem = (layers) => {
+function createItem(layers) {
   let newDna = createDna(layers);
   const existingDna = getDNA();
   if (isDnaUnique(newDna, existingDna)) {
-    return { newDna, layerImages: constructLayerToDna(newDna, layers) };
+    {
+      const dna = _dna.split(DNA_DELIMITER);
+
+      let mappedDnaToLayers = layers.map((layer, index) => {
+        let selectedElements = [];
+        const layerImages = dna.filter(
+          (element) => element.split(".")[0] == layer.id
+        );
+        layerImages.forEach((img) => {
+          const indexAddress = Parser.cleanDna(img);
+
+          //
+
+          const indices = indexAddress.toString().split(".");
+          // const firstAddress = indices.shift();
+          const lastAddress = indices.pop(); // 1
+          // recursively go through each index to get the nested item
+          let parentElement = indices.reduce((r, nestedIndex) => {
+            if (!r[nestedIndex]) {
+              throw new Error("wtf");
+            }
+            return r[nestedIndex].elements;
+          }, _layers); //returns string, need to return
+
+          selectedElements.push(parentElement[lastAddress]);
+        });
+        // If there is more than one item whose root address indicies match the layer ID,
+        // continue to loop through them an return an array of selectedElements
+
+        return {
+          name: layer.name,
+          blendmode: layer.blendmode,
+          opacity: layer.opacity,
+          selectedElements: selectedElements,
+          ...(layer.display_type !== undefined && {
+            display_type: layer.display_type,
+          }),
+        };
+      });
+
+      let results = mappedDnaToLayers;
+      debugLogs ? console.log("DNA:", dna) : null;
+      let loadedElements = [];
+      // reduce the stacked and nested layer into a single array
+      const allImages = results.reduce((images, layer) => {
+        return [...images, ...layer.selectedElements];
+      }, []);
+      Paint.sortZIndex(allImages).forEach((layer) => {
+        loadedElements.push(Paint.loadLayerImg(layer));
+      });
+
+      const renderObjectArray = Promise.all(loadedElements).then((data) => {
+        const layerData = {
+          dna,
+          layerConfigIndex,
+          tokenIndex,
+          _background: background,
+        };
+        Paint.paintLayers(ctxMain, renderObjectArray, layerData, format);
+
+        const metadata = outputFiles(tokenIndex, layerData);
+        return metadata;
+      });
+    }
   } else {
     failedCount++;
     createItem(layers);
@@ -76,113 +148,121 @@ const createItem = (layers) => {
       process.exit();
     }
   }
-};
+}
 
-const outputFiles = (_id, layerData, options) => {
-  const { newDna, abstractedIndexes } = layerData;
+/**
+ * Given an array of token ids, pick random items and regeneragte the
+ * image and json
+ **/
+const regenerateItems = (_ids, options) => {
+  let dnaList = getDNA();
+  const generatorPromises = [];
 
-  // Save the image
-  fs.writeFileSync(
-    `${imageDir}/${_id}${outputJPEG ? ".jpg" : ".png"}`,
-    canvas.toBuffer(`${outputJPEG ? "image/jpeg" : "image/png"}`)
-  );
+  _ids.forEach((id) => {
+    // get the dna lists
+    const _id = parseInt(id);
+    const layerEdition = layerConfigurations.reduce((acc, config) => {
+      return [...acc, config.growEditionSizeTo];
+    }, []);
 
-  const { _imageHash, _prefix, _offset } = postProcessMetadata(layerData);
+    const layerConfigIndex =
+      options.layerset ??
+      layerEdition.findIndex((editionCount) => _id <= editionCount);
+    const layers = layersSetup(
+      layerConfigurations[layerConfigIndex].layersOrder
+    );
 
-  const metadata = Metadata.addMetadata(newDna, abstractedIndexes[0], {
-    _prefix,
-    _offset,
-    _imageHash,
+    const newDna = createDna(layers);
+    options.debug ? console.log({ newDna }) : null;
+
+    // regenerate an image using main functions
+    // const allImages = layerImages.reduce((images, layer) => {
+    //   return [...images, ...layer.selectedElements];
+    // }, []);
+    if (isDnaUnique(newDna)) {
+      // prepend the same output num (abstractedIndexes[0])
+      // to the DNA as the saved files.
+      dnaList.add(
+        `${_id}/${newDna}${background.color ? "___" + background.color : ""}`
+      );
+      // uniqueDNAList.add(filterDNAOptions(newDna));
+      generatorPromises.push(
+        pool.exec("generate", [
+          newDna,
+          layers,
+          DNA_DELIMITER,
+          layerConfigIndex,
+          background,
+          _id,
+        ])
+      );
+    } else {
+      console.log(chalk.bgRed("DNA exists!"));
+      failedCount++;
+      if (failedCount >= uniqueDnaTorrance) {
+        console.log(
+          `You need more layers or elements to grow your edition to ${layerConfigurations[layerConfigIndex].growEditionSizeTo} artworks!`
+        );
+        process.exit();
+      }
+    }
   });
 
-  options.debug ? console.log({ metadata }) : null;
-  // save the metadata json
-  fs.writeFileSync(`${jsonDir}/${_id}.json`, JSON.stringify(metadata, null, 2));
-  console.log(chalk.bgGreenBright.black(`Recreated item: ${_id}`));
-  //TODO: update and output _metadata.json
+  //after loop
+  Promise.all(generatorPromises).then(async (results) => {
+    // Wait for all assets to be generated before writing the combined metadata
+    console.log("generator done");
+    // if (shuffleLayerConfigurations) {
+    //   console.log(chalk.bgMagenta("metadata sort", results[0].edition));
+    //   results.sort((a, b) => a.edition - b.edition);
+    // }
 
-  const originalMetadata = JSON.parse(fs.readFileSync(metadataFilePath));
-  const updatedMetadata = [...originalMetadata];
-  const editionIndex = _id - startIndex;
-  updatedMetadata[editionIndex] = metadata;
-  fs.writeFileSync(metadataFilePath, JSON.stringify(updatedMetadata, null, 2));
-};
+    const existingMetadata = JSON.parse(fs.readFileSync(metadataFilePath));
+    const updatedMetadata = existingMetadata;
+    results.forEach((item) => {
+      updatedMetadata[item.edition] = item;
+    });
 
-const regenerateItem = (_id, options) => {
-  // get the dna lists
-  // FIgure out which layer config set it's from
-  const layerEdition = layerConfigurations.reduce((acc, config) => {
-    return [...acc, config.growEditionSizeTo];
-  }, []);
-  const layerConfigIndex = layerEdition.findIndex(
-    (editionCount) => _id <= editionCount
-  );
+    writeMetaData(JSON.stringify(updatedMetadata, null, 2));
+    Metadata.layerMap();
+    pool.terminate();
+    writeDnaLog(JSON.stringify([...dnaList], null, 2));
+  });
 
-  const layers = layersSetup(layerConfigurations[layerConfigIndex].layersOrder);
+  // update the _dna.json
+  const existingDna = getDNA();
+  const updatedDnaList = Array.from(existingDna);
 
-  const { newDna, layerImages } = createItem(layers);
-  options.debug ? console.log({ newDna }) : null;
-
-  // regenerate an image using main functions
-  const allImages = layerImages.reduce((images, layer) => {
-    return [...images, ...layer.selectedElements];
-  }, []);
-
-  const loadedElements = allImages.reduce((acc, layer) => {
-    return [...acc, loadLayerImg(layer)];
-  }, []);
-
-  Promise.all(loadedElements).then((renderObjectArray) => {
-    const layerData = {
-      newDna,
-      layerConfigIndex,
-      abstractedIndexes: [_id],
-      _background: background,
-    };
-    // paint layers to global canvas context.. no return value
-    const outputLayerData = paintLayers(ctxMain, renderObjectArray, layerData);
-    outputFiles(_id, layerData, options);
-
-    // update the _dna.json
-    const existingDna = getDNA();
-    // const existingDnaFlat = Array.from(existingDna).map((dna) => dna.join(DNA_DELIMITER));
-
-    const updatedDnaList = Array.from(existingDna);
-    // find the correct entry and update it
-    const dnaIndex = _id - startIndex;
-    updatedDnaList[dnaIndex] = `${_id}/${newDna}${
-      outputLayerData.generatedBgHSL
-        ? "___" + outputLayerData.generatedBgHSL
-        : ""
-    }`;
-
-    options.debug
-      ? console.log(
-          chalk.redBright(`replacing old DNA:\n`, existingDnaFlat[dnaIndex])
-        )
-      : null;
-    options.debug
-      ? console.log(
-          chalk.greenBright(`\nWith new DNA:\n`, updatedDnaList[dnaIndex])
-        )
-      : null;
-
+  if (!options.nowrite) {
     fs.writeFileSync(
       path.join(dnaFilePath),
       JSON.stringify(updatedDnaList, null, 2)
     );
-  });
+  }
 };
 
 program
-  .argument("<id>")
+  .argument("<ids>")
+  .option("-l --layerset <layerset>", "pass layer configuration index")
+  .option(
+    "-c --config",
+    "optional path to confg file. defaults to ../config.js"
+  )
+  .option(
+    "-n, --nowrite",
+    "dry run, runs the script without writting any files."
+  )
   .option("-d, --debug", "display some debugging")
-  .action((id, options, command) => {
-    options.debug
-      ? console.log(chalk.greenBright.inverse(`Regemerating #${id}`))
+  .action((ids, options, command) => {
+    options.config
+      ? console.log(chalk.greenBright(`using config: ${path(options.config)}`))
       : null;
 
-    regenerateItem(Number(id), options);
+    options.debug
+      ? console.log(chalk.green.inverse(`Regenerating #${ids}`))
+      : null;
+
+    regenerateItems(ids.split(","), options);
   });
 
 program.parse();
