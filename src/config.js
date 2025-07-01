@@ -1,205 +1,123 @@
 "use strict";
-
-const path = require("path");
-const isLocal = typeof process.pkg === "undefined";
-const basePath = isLocal ? process.cwd() : path.dirname(process.execPath);
-
-// see src/blendMode.js for available blend modes
-// documentation: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/globalCompositeOperation
-const { MODE } = require(path.join(basePath, "src/blendMode.js"));
-
-const buildDir = path.join(basePath, "/build");
-const layersDir = path.join(basePath, "/layers");
-
-/*********************
- * General Generator Options
- ***********************/
-
-const description =
-  "This is the description of your NFT project, remember to replace this";
-const baseUri = "ipfs://NewUriToReplace";
-
-const outputJPEG = false; // if false, the generator outputs png's
-
-/**
- * Set your tokenID index start number.
- * ⚠️ Be sure it matches your smart contract!
- */
-const startIndex = 0;
-
-const format = {
-  width: 512,
-  height: 512,
-  smoothing: true, // set to false when up-scaling pixel art.
-};
-
-const background = {
-  generate: true,
-  brightness: "80%",
-};
-
-const layerConfigurations = [
-  {
-    growEditionSizeTo: 10,
-    namePrefix: "Series 2", // Use to add a name to Metadata `name:`
-    layersOrder: [
-      { name: "Background" },
-      {
-        name: "Back Accessory",
-        // options: {
-        //   bypassDNA: true,
-        // },
-      },
-      { name: "Head" },
-      { name: "Clothes" },
-      { name: "Eyes" },
-      { name: "Hair" },
-      { name: "Accessory" },
-      { name: "Shirt Accessories" },
-    ],
-  },
-  // {
-  //   growEditionSizeTo: 10,
-  //   namePrefix: "Lion",
-  //   resetNameIndex: true, // this will start the Lion count at #1 instead of #6
-  //   layersOrder: [
-  //     { name: "Background" },
-  //     { name: "Hats" },
-  //     { name: "Male Hair" },
-  //   ],
-  // },
-];
-
-/**
- * Set to true for when using multiple layersOrder configuration
- * and you would like to shuffle all the artwork together
- */
-const shuffleLayerConfigurations = false;
-
-const debugLogs = true;
-
-/*********************
- * Advanced Generator Options
- ***********************/
-
-// if you use an empty/transparent file, set the name here.
-const emptyLayerName = "NONE";
-
-/**
- * Incompatible items can be added to this object by a files cleanName
- * This works in layer order, meaning, you need to define the layer that comes
- * first as the Key, and the incompatible items that _may_ come after.
- * The current version requires all layers to have unique names, or you may
- * accidentally set incompatibilities for the _wrong_ item.
- */
-const incompatible = {
-  //   Red: ["Dark Long"],
-  //   // directory incompatible with directory example
-  //   White: ["rare-Pink-Pompadour"],
-};
-
-/**
- * Require combinations of files when constructing DNA, this bypasses the
- * randomization and weights.
- *
- * The layer order matters here, the key (left side) is an item within
- * the layer that comes first in the stack.
- * the items in the array are "required" items that should be pulled from folders
- * further in the stack
- */
-const forcedCombinations = {
-  // floral: ["MetallicShades", "Golden Sakura"],
-};
-
-/**
- * In the event that a filename cannot be the trait value name, for example when
- * multiple items should have the same value, specify
- * clean-filename: trait-value override pairs. Wrap filenames with spaces in quotes.
- */
-const traitValueOverrides = {
-  Helmet: "Space Helmet",
-  "gold chain": "GOLDEN NECKLACE",
-};
-
-const extraMetadata = {};
-
-const extraAttributes = () => [
-  // Optionally, if you need to overwrite one of your layers attributes.
-  // You can include the same name as the layer, here, and it will overwrite
-  //
-  // {
-  // trait_type: "Bottom lid",
-  //   value: ` Bottom lid # ${Math.random() * 100}`,
-  // },
-  // {
-  //   display_type: "boost_number",
-  //   trait_type: "Aqua Power",
-  //   value: Math.random() * 100,
-  // },
-  // {
-  //   display_type: "boost_number",
-  //   trait_type: "Health",
-  //   value: Math.random() * 100,
-  // },
-  // {
-  //   display_type: "boost_number",
-  //   trait_type: "Mana",
-  //   value: Math.floor(Math.random() * 100),
-  // },
-];
-
-// Outputs an Keccack256 hash for the image. Required for provenance hash
-const hashImages = true;
-
-const rarityDelimiter = "#";
-
-const uniqueDnaTorrance = 10000;
-
-/**
- * Set to true to always use the root folder as trait_type
- * Set to false to use weighted parent folders as trait_type
- * Default is true.
- */
-const useRootTraitType = true;
-
-const preview = {
-  thumbPerRow: 5,
-  thumbWidth: 50,
-  imageRatio: format.width / format.height,
-  imageName: "preview.png",
-};
-
-const preview_gif = {
-  numberOfImages: 5,
-  order: "ASC", // ASC, DESC, MIXED
-  repeat: 0,
-  quality: 100,
-  delay: 500,
-  imageName: "preview.gif",
-};
+const path  = require("path");
+const base  = typeof process.pkg === "undefined" ? process.cwd() : path.dirname(process.execPath);
 
 module.exports = {
-  background,
-  baseUri,
-  buildDir,
-  debugLogs,
-  description,
-  emptyLayerName,
-  extraAttributes,
-  extraMetadata,
-  forcedCombinations,
-  format,
-  hashImages,
-  incompatible,
-  layerConfigurations,
-  layersDir,
-  outputJPEG,
-  preview,
-  preview_gif,
-  rarityDelimiter,
-  shuffleLayerConfigurations,
-  startIndex,
-  traitValueOverrides,
-  uniqueDnaTorrance,
-  useRootTraitType,
+  /* ───── meta ───── */
+  description : "Protardio Citizens – test batch",
+  baseUri     : "ipfs://NewUriToReplace",
+  format      : { width: 600, height: 600, smoothing: false },
+
+  /* ───── backgrounds ───── */
+  background  : { generate: true, brightness: "80%" },
+
+  /* ───── dual configs ───── */
+  layerConfigurations: [
+    /* ①  rare costumes only */
+    {
+      growEditionSizeTo: 25,
+      namePrefix: "Protardio",
+      layersOrder: [
+        { name: "Backgrounds" },
+        { name: "Body.skin.race" },
+        { name: "Brows" },
+        { name: "Eyes" },
+        { name: "Face decoration" },
+        { name: "Hair" },
+        { name: "Costume" },               // hoodie / niqab / etc.
+        { name: "Mouth" },
+        { name: "Friend" },
+        { name: "Text Overlay" },
+      ],
+    },
+
+    /* ②  normal avatars (the remaining pcs) */
+    {
+      growEditionSizeTo: 1000,             // final id = 100
+      namePrefix: "Protardio",
+      layersOrder: [
+        { name: "Backgrounds" },
+        { name: "Body.skin.race" },
+        { name: "Brows" },
+        { name: "Eyes" },
+        { name: "Face decoration" },
+        { name: "Hair", options: { displayName: "Hair" } },
+        { name: "Glasses" },
+        { name: "Hat", options: { displayName: "Hat" } },
+        { name: "Shirt" },
+        { name: "Earrings" },
+        { name: "Mouth" },
+        { name: "Weapon" },
+        { name: "Friend" },
+        { name: "Text Overlay" },
+      ],
+    },
+  ],
+
+  /* ───── incompatibilities with pattern matching support ───── */
+  incompatible: {
+    // Oni bodies - no hair or hats
+    "Oni Light": ["Hair*", "Hat*", "hat_*", "*HIGHER HAT*", "*Party Hat*"],
+    "Oni Dark": ["Hair*", "Hat*", "hat_*", "*HIGHER HAT*", "*Party Hat*"],
+    
+    // Ghost bodies - no solid accessories
+    "Base Ghost": ["Glasses*", "Earrings*", "Hat*"],
+    "Ghost": ["Glasses*", "Earrings*", "Hat*"],
+    
+    // Certain costumes override other clothing
+    "CostumeAstronaut": ["Shirt*", "Hat*"],  // Astronaut has built-in helmet
+    "CostumePikachu": ["Shirt*"],             // Full body costume
+    "CostumeShark": ["Shirt*"],               // Full body costume
+    
+    // Niqab costumes hide certain facial features
+    "*Niqab": ["Mouth*", "Face decoration*"], // All niqab variants
+  },
+
+  /* ───── forced combinations (exact names only for now) ───── */
+  forcedCombinations: {
+    // Example: Force specific combinations
+    // "floral": ["MetallicShades", "Golden Sakura"],
+  },
+
+  /* ───── misc ───── */
+  emptyLayerName : "NON3",
+  rarityDelimiter: "#",
+  uniqueDnaTorrance: 100000,
+  shuffleLayerConfigurations: true,   // shuffles all outputs together :contentReference[oaicite:0]{index=0}
+  debugLogs: true,
+  hashImages: true,
+  useRootTraitType: true,
+  outputJPEG: false,
+  startIndex: 0,
+
+  /* paths */
+  buildDir : path.join(base, "build"),
+  layersDir: path.join(base, "layers"),
+
+  /* previews */
+  preview:     { thumbPerRow:5, thumbWidth:50, imageRatio:1, imageName:"preview.png" },
+  preview_gif: { numberOfImages:100, order:"MIXED", repeat:0, quality:100, delay:100, imageName:"preview.gif" },
+
+  extraAttributes: () => [],
+  
+  /* ───── additional scalable configuration ideas ───── */
+  // These are commented out but show what's possible:
+  
+  // traitGroups: {
+  //   "headwear": ["Hair*", "Hat*", "hat_*"],
+  //   "facewear": ["Glasses*", "Face*"],
+  //   "clothing": ["Shirt*", "Costume*"],
+  // },
+  
+  // conditionalWeights: {
+  //   "Winter*": { season: "winter", multiplier: 2.0 },
+  //   "Summer*": { season: "summer", multiplier: 2.0 },
+  // },
+  
+  // rarityTiers: {
+  //   "legendary": ["*Ghost*", "Oni*"],
+  //   "epic": ["*Aura*", "Alien*"],
+  //   "rare": ["Reptilian*", "Zombie*"],
+  // },
+  traitValueOverrides: {},
 };

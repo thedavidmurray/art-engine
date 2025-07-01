@@ -6,7 +6,6 @@ const basePath = isLocal ? process.cwd() : path.dirname(process.execPath);
 const fs = require("fs");
 const keccak256 = require("keccak256");
 const chalk = require("chalk");
-const { isIncompatible, filterCompatibleLayers } = require("./pattern-matcher.js");
 
 const { createCanvas, loadImage } = require(path.join(
   basePath,
@@ -519,7 +518,7 @@ function pickRandomElement(
   }
 
   const compatibleLayers = layer.elements.filter(
-    (layer) => !isIncompatible(layer.name, incompatibleDNA)
+    (layer) => !incompatibleDNA.includes(layer.name)
   );
   if (compatibleLayers.length === 0) {
     debugLogs
